@@ -4,6 +4,8 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
+
 // Register
 router.post('/register', async (req, res) => {
   const { name, email, phone, password, role, locality } = req.body;
@@ -26,7 +28,7 @@ router.post('/login', async (req, res) => {
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(400).json({ error: 'Invalid password' });
-  const token = jwt.sign({ userId: user._id, role: user.role }, 'secretkey');
+  const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET);
   res.json({ token, role: user.role });
 });
 
