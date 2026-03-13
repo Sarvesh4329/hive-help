@@ -24,8 +24,7 @@ fi
 docker pull "$IMAGE"
 
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-  docker stop "$CONTAINER_NAME"
-  docker rm "$CONTAINER_NAME"
+  docker rm -f "$CONTAINER_NAME"
 fi
 
 docker run -d \

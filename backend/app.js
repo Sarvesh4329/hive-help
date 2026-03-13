@@ -33,4 +33,7 @@ app.use('/api/users', usersRoutes);
 // Connect to MongoDB
 mongoose.connect(MONGODB_URI)
   .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
-  .catch(err => console.log(err));
+  .catch(err => {
+    console.error(err);
+    process.exit(1);
+  });

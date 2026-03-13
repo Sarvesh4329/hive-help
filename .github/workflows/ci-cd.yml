@@ -25,7 +25,7 @@ jobs:
       - name: Detect test script
         id: tests
         run: |
-          node -e "const pkg=require('./backend/package.json');const cmd=pkg.scripts && pkg.scripts.test;const shouldRun=!!(cmd && !cmd.includes('no test specified'));console.log(`shouldRun=${shouldRun}`);" >> $GITHUB_OUTPUT
+          node scripts/detect-tests.js backend/package.json >> $GITHUB_OUTPUT
 
       - name: Install backend dependencies
         if: steps.tests.outputs.shouldRun == 'true'
