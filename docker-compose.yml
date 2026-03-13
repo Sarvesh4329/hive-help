@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hive-help-backend:local
+    image: hive-help:local
     env_file:
       - .env
     environment:

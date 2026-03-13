@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/sarvesh4329/hive-help-backend:latest}"
+IMAGE="${IMAGE:-ghcr.io/sarvesh4329/hive-help:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-hive-help-backend}"
 PORT="${PORT:-5000}"
 ENV_FILE="${ENV_FILE:-.env}"

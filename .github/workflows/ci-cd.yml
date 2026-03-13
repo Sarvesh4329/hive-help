@@ -37,7 +37,7 @@ jobs:
 
       - name: Set image name
         id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/hive-help-backend" >> $GITHUB_OUTPUT
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
