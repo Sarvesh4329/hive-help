@@ -31,7 +31,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/users', usersRoutes);
 
 // Connect to MongoDB
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
   .catch(err => {
     console.error(err);
