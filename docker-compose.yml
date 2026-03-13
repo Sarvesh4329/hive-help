@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-hive-help}:local
+    image: ${IMAGE_NAME:-ghcr.io/sarvesh4329/hive-help}:latest
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-5000}
@@ -11,6 +11,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "${PORT:-5000}:5000"
+      - "80:80"
     depends_on:
       mongo:
         condition: service_healthy
@@ -27,6 +28,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup
     restart: unless-stopped
 
 volumes:

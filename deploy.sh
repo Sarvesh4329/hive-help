@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="${IMAGE_NAME:-ghcr.io/sarvesh4329/hive-help}"
-IMAGE="${IMAGE:-${IMAGE_NAME}:latest}"
-CONTAINER_NAME="${CONTAINER_NAME:-hive-help-backend}"
-PORT="${PORT:-5000}"
+# Ensure we're in the project root
+cd "$(dirname "$0")"
 
-docker pull "$IMAGE"
+echo "🚀 Starting deployment with Docker Compose..."
 
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-  docker rm -f "$CONTAINER_NAME"
-fi
+# Pull latest images
+docker compose pull
 
-docker run -d \
-  --name "$CONTAINER_NAME" \
-  -p "${PORT:-5000}:5000" \
-  -p "80:80" \
-  --restart unless-stopped \
-  "$IMAGE"
+# Start/Update services
+docker compose up -d
+
+echo "✅ Deployment complete. Watchtower is now monitoring for updates."
