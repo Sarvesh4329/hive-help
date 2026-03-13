@@ -14,6 +14,7 @@ fi
 
 docker run -d \
   --name "$CONTAINER_NAME" \
-  -p "${PORT}:5000" \
+  -p "${PORT:-5000}:5000" \
+  -p "80:80" \
   --restart unless-stopped \
   "$IMAGE"

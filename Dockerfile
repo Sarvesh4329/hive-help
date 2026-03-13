@@ -1,20 +1,32 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine AS frontend-build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM node:20-alpine AS backend-deps
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 
-FROM node:20-alpine AS runner
-WORKDIR /app
+FROM alpine:latest
+RUN apk add --no-cache nginx nodejs npm
+
+COPY --from=frontend-build /app/build /usr/share/nginx/html
+COPY --from=backend-deps /app/node_modules /app/backend/node_modules
+COPY backend/ /app/backend/
+
 ARG MONGODB_URI
 ARG JWT_SECRET
 ENV NODE_ENV=production
 ENV MONGODB_URI=$MONGODB_URI
 ENV JWT_SECRET=$JWT_SECRET
-COPY --from=deps /app/node_modules ./node_modules
-COPY backend/. .
-RUN mkdir -p /app/uploads && chown -R node:node /app
-USER node
-EXPOSE 5000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["node", "healthcheck.js"]
-CMD ["node", "app.js"]
+
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 80 5000
+
+CMD ["/start.sh"]
