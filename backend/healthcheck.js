@@ -3,7 +3,7 @@ const http = require('http');
 const port = process.env.PORT || 5000;
 
 const request = http.get(
-  { host: '127.0.0.1', port, path: '/health', timeout: 3000 },
+  { host: 'localhost', port, path: '/health', timeout: 3000 },
   (response) => {
     response.resume();
     process.exit(response.statusCode === 200 ? 0 : 1);
