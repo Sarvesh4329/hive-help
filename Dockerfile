@@ -10,11 +10,13 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 
-FROM alpine:latest
-RUN apk add --no-cache nginx nodejs npm
+FROM node:20-alpine
+RUN apk add --no-cache nginx
 
+WORKDIR /app
 COPY --from=frontend-build /app/build /usr/share/nginx/html
 COPY --from=backend-deps /app/node_modules /app/backend/node_modules
+COPY backend/package.json /app/backend/
 COPY backend/ /app/backend/
 
 ARG MONGODB_URI

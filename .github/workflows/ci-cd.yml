@@ -71,9 +71,11 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             MONGODB_URI=${{ secrets.MONGODB_URI }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
@@ -96,6 +98,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set lower case repo name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -128,7 +134,7 @@ jobs:
             echo "PORT=${{ secrets.PORT }}" >> .env
             echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-            echo "IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/hive-help:latest" >> .env
+            echo "IMAGE_NAME=ghcr.io/${{ steps.repo.outputs.name }}" >> .env
             chmod +x scripts/setup_ec2.sh deploy.sh
             ./scripts/setup_ec2.sh
             ./deploy.sh
