@@ -110,8 +110,11 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo "Starting EC2 cleanup..."
+            set -e
             mkdir -p ~/app
             rm -rf ~/app/*
+            echo "EC2 cleanup complete."
             
       - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7

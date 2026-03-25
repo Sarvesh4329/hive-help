@@ -16,6 +16,8 @@ services:
       mongo:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.70"
 
   mongo:
     image: mongo:7-jammy
@@ -29,6 +31,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: "0.50"
 
   watchtower:
     image: containrrr/watchtower
@@ -36,6 +40,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 30 --cleanup
     restart: unless-stopped
+    mem_limit: 64m
+    cpus: "0.10"
 
 volumes:
   mongo_data:
