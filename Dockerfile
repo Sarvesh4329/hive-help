@@ -31,7 +31,9 @@ ENV JWT_SECRET=$JWT_SECRET
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY start.sh /start.sh
-RUN chmod +x /start.sh
+RUN chmod +x /start.sh && \
+    mkdir -p /var/cache/nginx /var/log/nginx && \
+    chmod -R 777 /var/cache/nginx /var/log/nginx /usr/share/nginx/html
 
 EXPOSE 80 5000
 
