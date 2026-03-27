@@ -41,5 +41,14 @@ fi
 # 	sudo systemctl enable --now k3s
 # fi
 
+echo "Configuring firewall..."
+if command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow 22/tcp || true
+    sudo ufw allow 80/tcp || true
+    sudo ufw allow 5000/tcp || true
+    # Optionally enable if it's not enabled, but be careful with SSH
+    # sudo ufw --force enable
+fi
+
 echo "✅ Setup complete! Please log out and log back in for group changes to take effect."
 echo "Or run: newgrp docker"
