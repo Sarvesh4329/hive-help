@@ -33,7 +33,12 @@ curl -I http://localhost/ || echo "Warning: Local curl test failed, but Nginx mi
 echo "Checking Nginx process..."
 ps aux | grep nginx
 
-echo "Starting backend..."
+echo "Starting backend in background..."
 cd /app/backend
-# Direct output to console for debugging
-exec node app.js
+node app.js &
+
+# Wait for backend to start
+sleep 5
+
+echo "Starting nginx in foreground..."
+nginx

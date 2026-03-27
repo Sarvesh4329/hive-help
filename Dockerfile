@@ -33,6 +33,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY start.sh /start.sh
 RUN chmod +x /start.sh && \
     mkdir -p /var/cache/nginx /var/log/nginx && \
+    rm -rf /etc/nginx/http.d/*.conf /etc/nginx/conf.d/*.conf && \
     chmod -R 777 /var/cache/nginx /var/log/nginx /usr/share/nginx/html
 
 EXPOSE 80 5000
