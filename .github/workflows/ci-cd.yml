@@ -111,11 +111,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "Starting aggressive EC2 cleanup..."
-            set -e
-            # Stop conflicting services
-            sudo systemctl stop k3s || true
-            sudo systemctl disable k3s || true
-            sudo systemctl stop nginx || true
+            # Stop conflicting services (don't fail if they don't exist)
+            sudo systemctl stop k3s >/dev/null 2>&1 || true
+            sudo systemctl disable k3s >/dev/null 2>&1 || true
+            sudo systemctl stop nginx >/dev/null 2>&1 || true
             sudo pkill -f traefik || true
             
             # Remove old files
