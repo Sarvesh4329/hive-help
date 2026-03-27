@@ -24,8 +24,12 @@ if [ ! -f "/usr/share/nginx/html/index.html" ]; then
 fi
 
 echo "Frontend files found. Testing nginx response..."
-curl -I http://localhost/ || echo "Curl test failed"
+curl -I http://localhost/ || echo "Warning: Local curl test failed, but Nginx might still be working"
+
+echo "Checking Nginx process..."
+ps aux | grep nginx
 
 echo "Starting backend..."
 cd /app/backend
+# Direct output to console for debugging
 exec node app.js
