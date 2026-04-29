@@ -112,23 +112,28 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Install/Configure K3s without Traefik
+            # Install/Configure K3s without Traefik (idempotent)
             curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
             
-            # Ensure kubectl is ready
-            sleep 5
+            # Wait for K3s to be fully ready
+            sudo k3s kubectl wait --for=condition=ready node --all --timeout=60s
             
             # Stop any running docker-compose
             cd ~/app 2>/dev/null && sudo docker compose down 2>/dev/null || true
             
+            # GHCR image pull secret (so k3s can pull from ghcr.io)
+            sudo k3s kubectl create secret docker-registry ghcr-secret \
+              --docker-server=ghcr.io \
+              --docker-username=${{ github.actor }} \
+              --docker-password=${{ secrets.GITHUB_TOKEN }} \
+              --dry-run=client -o yaml | sudo k3s kubectl apply -f -
+            
             # Generate K8s manifest
-            cat << 'EOF' > /tmp/hive-help-deploy.yaml
+            cat << 'MANIFEST' | sudo k3s kubectl apply -f -
             apiVersion: apps/v1
             kind: Deployment
             metadata:
               name: hive-help-app
-              labels:
-                app: hive-help
             spec:
               replicas: 1
               selector:
@@ -139,31 +144,41 @@ jobs:
                   labels:
                     app: hive-help
                 spec:
+                  imagePullSecrets:
+                  - name: ghcr-secret
                   containers:
                   - name: hive-help
                     image: ghcr.io/${{ steps.repo.outputs.name }}:latest
                     imagePullPolicy: Always
                     ports:
                     - containerPort: 90
-                      hostPort: 80
             ---
             apiVersion: v1
             kind: Service
             metadata:
               name: hive-help-service
             spec:
-              type: ClusterIP
+              type: NodePort
               ports:
               - port: 90
                 targetPort: 90
+                nodePort: 30080
               selector:
                 app: hive-help
-            EOF
+            MANIFEST
             
-            # Apply manifest
-            sudo k3s kubectl apply -f /tmp/hive-help-deploy.yaml
-            
-            # Force rollout restart to pull latest image
+            # Wait for rollout
             sudo k3s kubectl rollout restart deployment hive-help-app
+            sudo k3s kubectl rollout status deployment hive-help-app --timeout=90s
+            
+            # Forward port 80 -> 30080 via iptables (persists across kubectl restarts)
+            sudo iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 30080 2>/dev/null || true
+            sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 30080
+            
+            # Also handle localhost access
+            sudo iptables -t nat -D OUTPUT -p tcp --dport 80 -j REDIRECT --to-port 30080 2>/dev/null || true
+            sudo iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-port 30080
+            
+            echo "✅ Deployment complete. App accessible on port 80."
  
 
