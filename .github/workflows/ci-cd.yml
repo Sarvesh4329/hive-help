@@ -103,42 +103,62 @@ jobs:
         id: repo
         run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
-      - name: Copy files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml,deploy.sh,scripts/setup_ec2.sh,nginx.conf,default.conf"
-          target: "~/app"
- 
-      - name: Deploy and Restart
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/app
+            # Start K3s if not running
+            sudo systemctl start k3s 2>/dev/null || true
             
-            # Stop k3s/traefik if they are taking port 80
-            sudo systemctl stop k3s 2>/dev/null || true
-            sudo pkill -9 traefik 2>/dev/null || true
+            # Stop any running docker-compose
+            cd ~/app 2>/dev/null && sudo docker compose down 2>/dev/null || true
             
-            # Create .env
-            echo "NODE_ENV=${{ secrets.NODE_ENV }}" > .env
-            echo "PORT=${{ secrets.PORT }}" >> .env
-            echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-            echo "IMAGE_NAME=ghcr.io/${{ steps.repo.outputs.name }}" >> .env
+            # Generate K8s manifest
+            cat << 'EOF' > /tmp/hive-help-deploy.yaml
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: hive-help-app
+              labels:
+                app: hive-help
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app: hive-help
+              template:
+                metadata:
+                  labels:
+                    app: hive-help
+                spec:
+                  containers:
+                  - name: hive-help
+                    image: ghcr.io/${{ steps.repo.outputs.name }}:latest
+                    imagePullPolicy: Always
+                    ports:
+                    - containerPort: 90
+            ---
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: hive-help-service
+            spec:
+              type: LoadBalancer
+              ports:
+              - port: 90
+                targetPort: 90
+                nodePort: 30090
+              selector:
+                app: hive-help
+            EOF
             
-            chmod +x scripts/setup_ec2.sh deploy.sh
+            # Apply manifest
+            sudo k3s kubectl apply -f /tmp/hive-help-deploy.yaml
             
-            # Run setup (Docker etc)
-            ./scripts/setup_ec2.sh
-            
-            # Cleanup Docker state
-            sudo docker system prune -f
-            
-            # Deploy
-            ./deploy.sh
+            # Force rollout restart to pull latest image
+            sudo k3s kubectl rollout restart deployment hive-help-app
+ 
+
