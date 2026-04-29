@@ -14,8 +14,9 @@ services:
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json
     command: --interval 60 --cleanup --run-once=false
     environment:
       - DOCKER_API_VERSION=1.40
+      - REPO_USER=${GHCR_USER}
+      - REPO_PASS=${GHCR_PAT}
     restart: always

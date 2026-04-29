@@ -111,6 +111,8 @@ jobs:
             echo "JWT_SECRET=$JWT_SECRET" >> .env
             echo "NODE_ENV=$NODE_ENV" >> .env
             echo "PORT=$PORT" >> .env
+            echo "GHCR_USER=${{ secrets.GHCR_USER }}" >> .env
+            echo "GHCR_PAT=${{ secrets.GHCR_PAT }}" >> .env
 
             # 6. Deploy via Docker Compose
             sudo docker compose pull
