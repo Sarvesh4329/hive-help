@@ -32,13 +32,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase image name
+        id: image_name
+        run: |
+          REPO_NAME="${{ github.repository }}"
+          echo "image_name=ghcr.io/${REPO_NAME,,}" >> $GITHUB_OUTPUT
+
       - name: Build and push application image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ env.APP_IMAGE }}:${{ github.sha }}, ${{ env.APP_IMAGE }}:latest
+          tags: ${{ steps.image_name.outputs.image_name }}:${{ github.sha }}, ${{ steps.image_name.outputs.image_name }}:latest
           build-args: |
             MONGODB_URI=${{ secrets.MONGODB_URI }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
@@ -61,7 +67,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
-          IMAGE_TAG: ghcr.io/${{ github.repository_owner }}/hive-help:${{ github.sha }}
+          IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
           # Lowercase the image tag for GHCR
           IMAGE_TAG=$(echo "$IMAGE_TAG" | tr '[:upper:]' '[:lower:]')
