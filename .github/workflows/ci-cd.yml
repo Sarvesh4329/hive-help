@@ -110,15 +110,30 @@ jobs:
             sudo docker rm hive-help 2>/dev/null || true
             sudo iptables -t nat -F 2>/dev/null || true
 
-            # ── 3. GHCR pull secret ───────────────────────────────────────
+            # ── 1. Install K3s (only if missing, with traefik disabled) ───
+            if ! command -v k3s > /dev/null 2>&1; then
+              curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+            fi
+            sudo systemctl restart k3s
+            sudo k3s kubectl wait --for=condition=ready node --all --timeout=120s
+
+            # ── 2. Patch CoreDNS to fix MongoDB Atlas SRV resolution ──────
+            sudo k3s kubectl -n kube-system patch configmap coredns --type merge -p \
+              '{"data":{"Corefile":".:53 {\n    errors\n    health\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n      pods insecure\n      fallthrough in-addr.arpa ip6.arpa\n    }\n    hosts /etc/coredns/NodeHosts {\n      ttl 60\n      reload 15s\n      fallthrough\n    }\n    prometheus :9153\n    forward . 8.8.8.8 8.8.4.4\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"}}' || true
+            sudo k3s kubectl -n kube-system rollout restart deployment coredns
+
+            # ── 3. Stop old containers ────────────────────────────────────
+            sudo docker stop hive-help 2>/dev/null || true
+            sudo docker rm hive-help 2>/dev/null || true
+
+            # ── 4. GHCR pull secret ───────────────────────────────────────
             sudo k3s kubectl create secret docker-registry ghcr-secret \
               --docker-server=ghcr.io \
               --docker-username=${{ github.actor }} \
               --docker-password=${{ secrets.GITHUB_TOKEN }} \
               --dry-run=client -o yaml | sudo k3s kubectl apply -f -
 
-            # ── 4. Deploy app + LoadBalancer on port 80 ───────────────────
-            # K3s servicelb will create a svclb pod that binds port 80 on host
+            # ── 5. Deploy app + NodePort on 31000 ─────────────────────────
             sudo k3s kubectl apply -f - << 'EOF'
             apiVersion: apps/v1
             kind: Deployment
@@ -148,20 +163,38 @@ jobs:
             metadata:
               name: hive-help-service
             spec:
-              type: LoadBalancer
+              type: NodePort
               selector:
                 app: hive-help
               ports:
               - name: http
                 port: 80
                 targetPort: 80
+                nodePort: 31000
             EOF
 
-            # ── 5. Rollout latest image ───────────────────────────────────
+            # ── 6. Rollout latest image ───────────────────────────────────
             sudo k3s kubectl rollout restart deployment hive-help-app
             sudo k3s kubectl rollout status deployment hive-help-app --timeout=120s
 
-            # ── 6. Wait for svclb pod to bind port 80 ─────────────────────
-            sleep 5
-            sudo k3s kubectl get pods -A
+            # ── 7. Install and configure Host NGINX ───────────────────────
+            sudo apt-get update && sudo apt-get install -y nginx
+
+            sudo bash -c 'cat > /etc/nginx/sites-enabled/default << NGINXEOF
+            server {
+                listen 80 default_server;
+                server_name _;
+                location / {
+                    proxy_pass http://127.0.0.1:31000;
+                    proxy_http_version 1.1;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_read_timeout 60s;
+                }
+            }
+            NGINXEOF'
+
+            sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
+
             echo "✅ App live at http://$(curl -s ifconfig.me)"
