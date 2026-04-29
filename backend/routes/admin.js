@@ -6,7 +6,7 @@ const Appointment = require('../models/Appointment');
 const Order = require('../models/Order');
 const { auth, requireRole } = require('../middleware/auth'); // Assuming requireRole is defined in your auth middleware
 
-// Get all users
+// Get all user
 router.get('/users', auth, requireRole('admin'), async (req, res) => {
   const users = await User.find();
   res.json(users);
