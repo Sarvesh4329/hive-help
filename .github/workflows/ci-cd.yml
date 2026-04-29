@@ -67,8 +67,6 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
           IMAGE_TAG_BASE: ghcr.io/${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           IMAGE_TAG=$(echo "${IMAGE_TAG_BASE,,}:${GITHUB_SHA}")
           
@@ -76,23 +74,22 @@ jobs:
           printf "%s\n" "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Copy k8s directory
+          # Copy k8s files
           scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -r k8s "${EC2_USER:-ubuntu}@${EC2_HOST}:~/"
 
-          # Run deployment commands
+          # Run deployment
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "${EC2_USER:-ubuntu}@${EC2_HOST}" \
             IMAGE_TAG="$IMAGE_TAG" \
-            GITHUB_ACTOR="$GITHUB_ACTOR" \
-            GITHUB_TOKEN="$GITHUB_TOKEN" \
+            GITHUB_ACTOR="${{ github.actor }}" \
+            GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
             bash << 'ENDSSH'
             set -e
 
-            # 1. Clear Port 80 and cleanup Nginx
+            # 1. Kill everything on port 80
             sudo systemctl stop nginx 2>/dev/null || true
-            sudo systemctl disable nginx 2>/dev/null || true
             sudo fuser -k 80/tcp 2>/dev/null || true
 
-            # 2. Ensure K3s is running (Lean version)
+            # 2. Ensure K3s is running without traefik
             if ! command -v k3s > /dev/null 2>&1; then
               curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
             fi
@@ -104,53 +101,19 @@ jobs:
               '{"data":{"Corefile":".:53 {\n    errors\n    health\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n      pods insecure\n      fallthrough in-addr.arpa ip6.arpa\n    }\n    hosts /etc/coredns/NodeHosts {\n      ttl 60\n      reload 15s\n      fallthrough\n    }\n    prometheus :9153\n    forward . 8.8.8.8 8.8.4.4\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"}}' || true
             sudo k3s kubectl -n kube-system rollout restart deployment coredns || true
 
-            # 4. Pull Secret
+            # 4. Secret
             sudo k3s kubectl create secret docker-registry ghcr-secret \
               --docker-server=ghcr.io \
               --docker-username="$GITHUB_ACTOR" \
               --docker-password="$GITHUB_TOKEN" \
               --dry-run=client -o yaml | sudo k3s kubectl apply -f -
 
-            # 5. Final Push: hostNetwork + Recreate + Resources
-            sudo k3s kubectl apply -f - << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: hive-help-app
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: hive-help
-  template:
-    metadata:
-      labels:
-        app: hive-help
-    spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      imagePullSecrets:
-      - name: ghcr-secret
-      containers:
-      - name: hive-help
-        image: $IMAGE_TAG
-        securityContext:
-          runAsUser: 0
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-EOF
+            # 5. Final deployment using the external YAML file
+            sed -i "s|IMAGE_PLACEHOLDER_APP|$IMAGE_TAG|g" k8s/final-deploy.yaml
+            sudo k3s kubectl apply -f k8s/final-deploy.yaml
             
             sudo k3s kubectl rollout restart deployment hive-help-app
             sudo k3s kubectl rollout status deployment/hive-help-app --timeout=180s
 
-            echo "Deployment successful! http://3.236.14.12"
+            echo "Deployment successful!"
           ENDSSH
