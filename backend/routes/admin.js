@@ -12,7 +12,7 @@ router.get('/users', auth, requireRole('admin'), async (req, res) => {
   res.json(users);
 });
 
-// Update a user's role
+// Update a user's rol
 router.patch('/users/:id/role', auth, requireRole('admin'), async (req, res) => {
   try {
     const { role } = req.body;
