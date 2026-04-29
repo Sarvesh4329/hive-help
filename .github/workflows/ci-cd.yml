@@ -145,17 +145,17 @@ jobs:
                     imagePullPolicy: Always
                     ports:
                     - containerPort: 90
+                      hostPort: 80
             ---
             apiVersion: v1
             kind: Service
             metadata:
               name: hive-help-service
             spec:
-              type: LoadBalancer
+              type: ClusterIP
               ports:
-              - port: 80
+              - port: 90
                 targetPort: 90
-                nodePort: 30080
               selector:
                 app: hive-help
             EOF
