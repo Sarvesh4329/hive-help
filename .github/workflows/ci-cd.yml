@@ -115,13 +115,9 @@ jobs:
             # Wait for rollout
             sudo k3s kubectl rollout status deployment/hive-help-app --timeout=180s
 
-            # 6. Configure Host NGINX to proxy to the Service IP
+            # 6. Configure Host NGINX to proxy to the Pod on Port 8080
             sudo apt-get update && sudo apt-get install -y nginx
             
-            SVC_IP=$(sudo k3s kubectl get svc hive-help-service -o jsonpath='{.spec.clusterIP}')
-            
-            # Use template file to avoid heredoc errors
-            sed -i "s|SVC_IP_PLACEHOLDER|$SVC_IP|g" k8s/nginx-host.conf
             sudo cp k8s/nginx-host.conf /etc/nginx/sites-available/hive-help
             sudo ln -sf /etc/nginx/sites-available/hive-help /etc/nginx/sites-enabled/default
             
