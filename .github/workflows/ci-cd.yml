@@ -97,93 +97,35 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # ── 1. Install K3s (only if missing) ──────────────────────────
-            if ! command -v k3s > /dev/null 2>&1; then
-              curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
-            fi
-            sudo systemctl start k3s
-            sudo k3s kubectl wait --for=condition=ready node --all --timeout=120s
-
-            # ── 2. Stop legacy docker-compose if present ───────────────────
-            if [ -f ~/app/docker-compose.yml ]; then
-              cd ~/app && sudo docker compose down 2>/dev/null || true
+            # ── 1. Ensure Docker is installed ─────────────────────────────
+            if ! command -v docker > /dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y docker.io
+              sudo systemctl enable --now docker
             fi
 
-            # ── 3. GHCR pull secret ───────────────────────────────────────
-            sudo k3s kubectl create secret docker-registry ghcr-secret \
-              --docker-server=ghcr.io \
-              --docker-username=${{ github.actor }} \
-              --docker-password=${{ secrets.GITHUB_TOKEN }} \
-              --dry-run=client -o yaml | sudo k3s kubectl apply -f -
+            # ── 2. Clean up K8s, nginx and old iptables rules ─────────────
+            sudo systemctl stop k3s 2>/dev/null || true
+            sudo systemctl stop nginx 2>/dev/null || true
+            sudo iptables -t nat -F 2>/dev/null || true
 
-            # ── 4. Deploy app pod + NodePort 31000 ────────────────────────
-            sudo k3s kubectl apply -f - << 'MANIFEST'
-            apiVersion: apps/v1
-            kind: Deployment
-            metadata:
-              name: hive-help-app
-            spec:
-              replicas: 1
-              selector:
-                matchLabels:
-                  app: hive-help
-              template:
-                metadata:
-                  labels:
-                    app: hive-help
-                spec:
-                  imagePullSecrets:
-                  - name: ghcr-secret
-                  containers:
-                  - name: hive-help
-                    image: ghcr.io/${{ steps.repo.outputs.name }}:latest
-                    imagePullPolicy: Always
-                    ports:
-                    - containerPort: 80
-            ---
-            apiVersion: v1
-            kind: Service
-            metadata:
-              name: hive-help-service
-            spec:
-              type: NodePort
-              selector:
-                app: hive-help
-              ports:
-              - port: 80
-                targetPort: 80
-                nodePort: 31000
-            MANIFEST
+            # ── 3. Login to GHCR ──────────────────────────────────────────
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io \
+              -u ${{ github.actor }} --password-stdin
 
-            sudo k3s kubectl rollout restart deployment hive-help-app
-            sudo k3s kubectl rollout status deployment hive-help-app --timeout=120s
+            # ── 4. Pull latest image ──────────────────────────────────────
+            sudo docker pull ghcr.io/${{ steps.repo.outputs.name }}:latest
 
-            # ── 5. Patch CoreDNS to use 8.8.8.8 (fixes MongoDB Atlas SRV DNS) ──
-            sudo k3s kubectl -n kube-system patch configmap coredns --type merge -p \
-              '{"data":{"Corefile":".:53 {\n    errors\n    health\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n      pods insecure\n      fallthrough in-addr.arpa ip6.arpa\n    }\n    hosts /etc/coredns/NodeHosts {\n      ttl 60\n      reload 15s\n      fallthrough\n    }\n    prometheus :9153\n    forward . 8.8.8.8 8.8.4.4\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"}}' || true
-            sudo k3s kubectl -n kube-system rollout restart deployment coredns
+            # ── 5. Stop old container and start fresh ─────────────────────
+            sudo docker stop hive-help 2>/dev/null || true
+            sudo docker rm hive-help 2>/dev/null || true
 
-            # ── 6. Install host nginx and proxy to pod IP directly ────────
-            sudo apt-get install -y nginx
+            sudo docker run -d \
+              --name hive-help \
+              --restart unless-stopped \
+              -p 80:80 \
+              -p 5000:5000 \
+              ghcr.io/${{ steps.repo.outputs.name }}:latest
 
-            POD_IP=$(sudo k3s kubectl get pod -l app=hive-help -o jsonpath='{.items[0].status.podIP}')
-            echo "Routing nginx -> Pod IP: $POD_IP"
-
-            sudo tee /etc/nginx/sites-enabled/default > /dev/null << NGINXEOF
-            server {
-                listen 80 default_server;
-                server_name _;
-                location / {
-                    proxy_pass http://$POD_IP;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                    proxy_read_timeout 60s;
-                }
-            }
-            NGINXEOF
-
-            sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
-
+            sleep 3
+            sudo docker ps | grep hive-help
             echo "✅ App live at http://$(curl -s ifconfig.me)"
