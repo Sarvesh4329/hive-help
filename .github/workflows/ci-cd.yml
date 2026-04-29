@@ -82,6 +82,8 @@ jobs:
             JWT_SECRET="${{ secrets.JWT_SECRET }}" \
             NODE_ENV="${{ secrets.NODE_ENV }}" \
             PORT="${{ secrets.PORT }}" \
+            GITHUB_ACTOR="${{ github.actor }}" \
+            GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
             bash << 'ENDSSH'
             set -e
 
@@ -100,15 +102,18 @@ jobs:
             sudo systemctl stop nginx 2>/dev/null || true
             sudo fuser -k 80/tcp 2>/dev/null || true
 
-            # 4. Deploy via Docker Compose
+            # 4. Login to GHCR to avoid permission denied
+            echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+            # 5. Deploy via Docker Compose
             export IMAGE_NAME="$IMAGE_TAG"
             export MONGODB_URI="$MONGODB_URI"
             export JWT_SECRET="$JWT_SECRET"
             export NODE_ENV="$NODE_ENV"
             export PORT="$PORT"
 
-            docker compose pull
-            docker compose up -d --force-recreate --remove-orphans
+            sudo docker compose pull
+            sudo docker compose up -d --force-recreate --remove-orphans
 
             echo "Deployment successful! http://${EC2_HOST}"
           ENDSSH

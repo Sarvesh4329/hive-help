@@ -15,9 +15,14 @@ echo "Creating debug test.html..."
 echo "<html><body><h1>Nginx is working</h1></body></html>" > /usr/share/nginx/html/test.html
 chmod 644 /usr/share/nginx/html/test.html
 
-echo "Starting backend in background..."
+echo "Starting backend watchdog..."
 cd /app/backend
-node app.js &
+while true; do
+    echo "Starting Node.js backend..."
+    node app.js >> /var/log/backend.log 2>&1
+    echo "Backend crashed with exit code $?. Restarting in 5 seconds..."
+    sleep 5
+done &
 
 # Wait for backend to start
 sleep 5
