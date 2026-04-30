@@ -115,8 +115,8 @@ jobs:
             echo "GHCR_PAT=${{ secrets.GHCR_PAT }}" >> .env
 
             # 6. Deploy via Docker Compose
-            sudo docker compose pull
-            sudo docker compose up -d --force-recreate --remove-orphans
+            docker compose pull
+            docker compose up -d --force-recreate --remove-orphans
 
             echo "Deployment successful! http://${EC2_HOST}"
           ENDSSH
